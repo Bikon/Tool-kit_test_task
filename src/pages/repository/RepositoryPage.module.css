@@ -1,0 +1,23 @@
+h1 {
+    font-size: 2em;
+    margin-bottom: 20px;
+}
+
+img {
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+a {
+    text-decoration: none;
+    color: #0366d6;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    margin-bottom: 5px;
+}
