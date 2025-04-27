@@ -1,14 +1,13 @@
 .container {
-    max-width: 960px;
+    max-width: 800px;
     margin: 0 auto;
-    padding: 0 16px;
-    box-sizing: border-box;
+    padding: 20px;
 }
 
 .searchInput {
     width: 100%;
-    padding: 10px 14px;
-    font-size: 15px;
+    padding: 10px 15px;
+    font-size: 16px;
     border: 1px solid #ccc;
     border-radius: 8px;
     margin-bottom: 20px;
@@ -16,89 +15,24 @@
 
 .repoList {
     list-style: none;
-    margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    margin: 0;
 }
 
 .repoItem {
-    padding: 12px 16px;
-    background-color: #f9f9f9;
-    border: 1px solid #e0e0e0;
+    background-color: #fff;
+    padding: 15px;
+    margin-bottom: 10px;
     border-radius: 8px;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.repoItem:hover {
-    background-color: #f0f8ff;
-    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .repoLink {
-    font-size: 16px;
     color: #0070f3;
+    font-weight: bold;
     text-decoration: none;
 }
 
 .repoLink:hover {
     text-decoration: underline;
-}
-
-.paginationControls {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 24px;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.perPageSelector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-}
-
-.perPageSelector label {
-    font-size: 14px;
-}
-
-.perPageSelector select {
-    padding: 6px 10px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    height: 36px;
-}
-
-/* 📱 Мобильная адаптация */
-@media (max-width: 600px) {
-    .paginationControls {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-    }
-
-    .searchInput {
-        font-size: 14px;
-        padding: 8px 12px;
-        margin-bottom: 16px;
-    }
-
-    .repoLink {
-        font-size: 14px;
-    }
-
-    .perPageSelector label {
-        font-size: 13px;
-    }
-
-    .perPageSelector select {
-        font-size: 13px;
-        height: 32px;
-        padding: 4px 8px;
-    }
 }
