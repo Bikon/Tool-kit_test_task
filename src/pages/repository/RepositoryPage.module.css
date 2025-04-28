@@ -46,3 +46,13 @@
     margin-top: 20px;
     font-size: 16px;
 }
+
+.repoNameLink {
+    color: #333;
+    text-decoration: none;
+}
+
+.repoNameLink:hover {
+    text-decoration: underline;
+    color: #0070f3;
+}

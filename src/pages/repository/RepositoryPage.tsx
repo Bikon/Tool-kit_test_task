@@ -25,7 +25,16 @@ export function RepositoryPage() {
                     {repo?.owner?.login}
                 </a>
             </div>
-            <h1>{repo?.name}</h1>
+            <h1>
+                <a
+                    href={repo?.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.repoNameLink}
+                >
+                    {repo?.name}
+                </a>
+            </h1>
             <p>⭐ {repo?.stargazerCount} stars</p>
             <p>Last updated: {new Date(repo?.updatedAt).toLocaleDateString()}</p>
 
