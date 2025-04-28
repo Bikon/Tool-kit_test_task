@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client';
 import { useUnit } from 'effector-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { SEARCH_REPOSITORIES } from '@/shared/api/github/queries';
+import { GET_USER_REPOSITORIES } from '@/shared/api/github/queries';
 import { $searchQuery, setSearchQuery, $page, setPage, resetPagination } from '@/store/searchStore';
+import { RepositoryItem } from '@/types/RepositoryItem';
 import { Loader } from '@/shared/ui/Loader/Loader';
 import { Modal } from '@/shared/ui/Modal/Modal';
+import { RepositoryListItem } from '@/shared/ui/RepositoryListItem/RepositoryListItem';
 import { Paginator } from '@/shared/ui/Paginator/Paginator';
-import { Link } from 'react-router-dom';
 import styles from './HomePage.module.css';
 
-// Константы
 const MAX_TOTAL_ITEMS = 500;
 const DEFAULT_ITEMS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -24,20 +25,34 @@ export function HomePage() {
     const [query, setQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [modalMessage, setModalMessage] = useState('');
+    const [cachedEdges, setCachedEdges] = useState<any[]>([]);
 
-    const { data, loading, error, networkStatus } = useQuery(SEARCH_REPOSITORIES, {
+    const { data: searchData, loading: searchLoading, error: searchError } = useQuery(SEARCH_REPOSITORIES, {
         variables: {
             query: searchQuery || 'stars:>1',
             first: TOTAL_ITEMS_TO_LOAD,
         },
+        skip: !query.length,
         notifyOnNetworkStatusChange: true,
         fetchPolicy: 'network-only',
     });
 
-    const availableEdges = data?.search?.edges || [];
+    const { data: viewerData, loading: viewerLoading, error: viewerError } = useQuery(GET_USER_REPOSITORIES, {
+        variables: { first: TOTAL_ITEMS_TO_LOAD },
+        skip: !!query.length, // если есть текст поиска — не запрашиваем viewer
+        fetchPolicy: 'network-only',
+    });
+
+    const isLoading = query.length > 0 ? searchLoading : viewerLoading;
+    const isError = query.length > 0 ? searchError : viewerError;
+
+    const searchEdges = cachedEdges.length > 0 ? cachedEdges : (searchData?.search?.edges || []);
+    const viewerEdges: RepositoryItem[] = viewerData?.viewer?.repositories?.nodes || [];
+
+    const availableEdges: RepositoryItem[] = query.length > 0 ? searchEdges?.map((item: any) => item.node) : viewerEdges;
+
     const totalPages = Math.min(Math.ceil(availableEdges.length / DEFAULT_ITEMS_PER_PAGE), DEFAULT_MAX_PAGES);
 
-    // При первом монтировании: подтянуть query и page из URL
     useEffect(() => {
         const initialQuery = searchParams.get('query') || '';
         const initialPage = Number(searchParams.get('page') || '1');
@@ -48,9 +63,17 @@ export function HomePage() {
         if (!isNaN(initialPage) && initialPage > 0) {
             setPage(initialPage);
         }
+
+        const cachedData = sessionStorage.getItem('github_repositories');
+        if (cachedData) {
+            try {
+                setCachedEdges(JSON.parse(cachedData));
+            } catch {
+                sessionStorage.removeItem('github_repositories');
+            }
+        }
     }, []);
 
-    // При изменении текстового поиска (пользователь вводит текст)
     useEffect(() => {
         const timeout = setTimeout(() => {
             if (query !== searchQuery) {
@@ -58,19 +81,25 @@ export function HomePage() {
                 resetPagination();
                 setPage(1);
                 setSearchParams({ query, page: '1' });
+                sessionStorage.removeItem('github_repositories');
             }
         }, 500);
 
         return () => clearTimeout(timeout);
     }, [query]);
 
-    // Обработка ошибок
     useEffect(() => {
-        if (error) {
-            setModalMessage(`Ошибка запроса: ${error.message}`);
+        if (searchData?.search?.edges) {
+            sessionStorage.setItem('github_repositories', JSON.stringify(searchData.search.edges));
+        }
+    }, [searchData]);
+
+    useEffect(() => {
+        if (isError) {
+            setModalMessage(`Ошибка запроса: ${isError.message}`);
             setShowModal(true);
         }
-    }, [error]);
+    }, [isError]);
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setQuery(e.target.value);
@@ -99,26 +128,14 @@ export function HomePage() {
                 placeholder="Search GitHub Repositories"
             />
 
-            {(loading && networkStatus !== 7) && <Loader />}
+            {isLoading && <Loader />}
 
-            {/* Показываем только после загрузки и без ошибок */}
-            {!loading && !error && (
+            {!isLoading && !isError && (
                 <ul className={styles.repoList}>
                     {availableEdges
                         .slice((currentPage - 1) * DEFAULT_ITEMS_PER_PAGE, currentPage * DEFAULT_ITEMS_PER_PAGE)
-                        .map((repo: any) => (
-                            <li key={repo.node.id} className={styles.repoItem}>
-                                <Link
-                                    to={`/repository/${repo.node.owner.login}/${repo.node.name}`}
-                                    className={styles.repoLink}
-                                >
-                                    {repo.node.name}
-                                </Link>
-                                {' — '}
-                                ⭐ {repo.node.stargazerCount}
-                                {' — '}
-                                🕒 {new Date(repo.node.pushedAt).toLocaleDateString()}
-                            </li>
+                        .map((repo: RepositoryItem) => (
+                            <RepositoryListItem key={repo.id} repo={repo}/>
                         ))}
                 </ul>
             )}

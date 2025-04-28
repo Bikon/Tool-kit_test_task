@@ -35,3 +35,22 @@ export const GET_REPOSITORY = gql`
     }
   }
 `;
+
+export const GET_USER_REPOSITORIES = gql`
+  query GetUserRepositories($first: Int!) {
+    viewer {
+      repositories(first: $first, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        nodes {
+          id
+          name
+          url
+          stargazerCount
+          pushedAt
+          owner {
+            login
+          }
+        }
+      }
+    }
+  }
+`;
