@@ -1,5 +1,18 @@
 import { gql } from '@apollo/client';
 
+export const REPOSITORY_FRAGMENT = gql`
+  fragment RepositoryFragment on Repository {
+    id
+    name
+    url
+    stargazerCount
+    pushedAt
+    owner {
+      login
+    }
+  }
+`;
+
 export const REPOSITORY_FIELDS = gql`
   fragment RepositoryFields on Repository {
     id
@@ -12,14 +25,5 @@ export const REPOSITORY_FIELDS = gql`
       avatarUrl
       url
     }
-  }
-`;
-
-export const PAGE_INFO_FIELDS = gql`
-  fragment PageInfoFields on PageInfo {
-    startCursor
-    endCursor
-    hasNextPage
-    hasPreviousPage
   }
 `;

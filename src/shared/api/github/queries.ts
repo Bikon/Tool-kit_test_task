@@ -1,43 +1,25 @@
 import { gql } from '@apollo/client';
-import { REPOSITORY_FIELDS, PAGE_INFO_FIELDS } from './fragments';
+import { REPOSITORY_FRAGMENT, REPOSITORY_FIELDS } from './fragments';
 
-// Поиск репозиториев
 export const SEARCH_REPOSITORIES = gql`
-  ${REPOSITORY_FIELDS}
-  ${PAGE_INFO_FIELDS}
-
-  query SearchRepositories(
-    $query: String!
-    $first: Int
-    $after: String
-    $last: Int
-    $before: String
-  ) {
+  ${REPOSITORY_FRAGMENT}
+  
+  query SearchRepositories($query: String!, $first: Int!) {
     search(
-      type: REPOSITORY
       query: $query
+      type: REPOSITORY
       first: $first
-      after: $after
-      last: $last
-      before: $before
     ) {
       repositoryCount
-      pageInfo {
-        ...PageInfoFields
-      }
       edges {
         node {
-          ... on Repository {
-            ...RepositoryFields
-          }
+          ...RepositoryFragment
         }
-        cursor
       }
     }
   }
 `;
 
-// Получение одного репозитория
 export const GET_REPOSITORY = gql`
   ${REPOSITORY_FIELDS}
 

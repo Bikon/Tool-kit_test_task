@@ -1,112 +1,91 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client';
 import { useUnit } from 'effector-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { SEARCH_REPOSITORIES } from '@/shared/api/github/queries';
-import { $searchQuery, setSearchQuery } from '@/store/searchStore';
+import { $searchQuery, setSearchQuery, $page, setPage, resetPagination } from '@/store/searchStore';
 import { Loader } from '@/shared/ui/Loader/Loader';
-import { ErrorMessage } from '@/shared/ui/ErrorMessage/ErrorMessage';
-import { Paginator } from '@/shared/ui/Paginator/Paginator';
 import { Modal } from '@/shared/ui/Modal/Modal';
+import { Paginator } from '@/shared/ui/Paginator/Paginator';
+import { Link } from 'react-router-dom';
 import styles from './HomePage.module.css';
+
+// Константы
+const MAX_TOTAL_ITEMS = 500;
+const DEFAULT_ITEMS_PER_PAGE = 10;
+const DEFAULT_MAX_PAGES = 10;
+const TOTAL_ITEMS_TO_LOAD = Math.min(DEFAULT_ITEMS_PER_PAGE * DEFAULT_MAX_PAGES, MAX_TOTAL_ITEMS);
 
 export function HomePage() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const navigate = useNavigate();
 
-    const initialQuery = searchParams.get('query') || '';
-    const initialPage = parseInt(searchParams.get('page') || '1', 10);
-
-    const [query, setQuery] = useState(initialQuery);
-    const [currentPage, setCurrentPage] = useState(initialPage);
-    const [perPage, setPerPage] = useState(10);
-    const [lastCursor, setLastCursor] = useState<string | null>(null);
     const [searchQuery] = useUnit([$searchQuery]);
-
-    const [showModal, setShowModal] = useState(true);
-    const [modalType, setModalType] = useState<'success' | 'warning' | 'error'>('warning');
+    const [currentPage] = useUnit([$page]);
+    const [query, setQuery] = useState('');
+    const [showModal, setShowModal] = useState(false);
     const [modalMessage, setModalMessage] = useState('');
 
-    const { loading, data, error, refetch, networkStatus } = useQuery(SEARCH_REPOSITORIES, {
+    const { data, loading, error, networkStatus } = useQuery(SEARCH_REPOSITORIES, {
         variables: {
             query: searchQuery || 'stars:>1',
-            first: perPage,
-            after: lastCursor,
+            first: TOTAL_ITEMS_TO_LOAD,
         },
         notifyOnNetworkStatusChange: true,
-        fetchPolicy: 'cache-first',
+        fetchPolicy: 'network-only',
     });
 
-    const totalCount = data?.search?.repositoryCount || 0;
-    const totalPages = Math.min(Math.ceil(totalCount / perPage), 10);
+    const availableEdges = data?.search?.edges || [];
+    const totalPages = Math.min(Math.ceil(availableEdges.length / DEFAULT_ITEMS_PER_PAGE), DEFAULT_MAX_PAGES);
 
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setQuery(e.target.value);
-    };
-
-    const handlePageChange = async (page: number) => {
-        if (page > currentPage && data?.search?.pageInfo?.endCursor) {
-            setLastCursor(data.search.pageInfo.endCursor);
-        } else if (page < currentPage) {
-            setLastCursor(null);
-        }
-
-        setCurrentPage(page);
-        setSearchParams({ query: searchQuery, page: page.toString() });
-
-        await refetch({
-            query: searchQuery || 'stars:>1',
-            first: perPage,
-            after: page === 1 ? null : lastCursor,
-        });
-    };
-
-    const handlePerPageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newPerPage = parseInt(e.target.value, 10);
-        setPerPage(newPerPage);
-        setLastCursor(null);
-        setCurrentPage(1);
-
-        setSearchParams({ query: searchQuery, page: '1' });
-
-        refetch({
-            query: searchQuery || 'stars:>1',
-            first: newPerPage,
-            after: null,
-        });
-    };
-
+    // При первом монтировании: подтянуть query и page из URL
     useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            setLastCursor(null);
-            setCurrentPage(1);
-            setSearchQuery(query);
+        const initialQuery = searchParams.get('query') || '';
+        const initialPage = Number(searchParams.get('page') || '1');
 
-            setSearchParams({ query, page: '1' });
+        setQuery(initialQuery);
+        setSearchQuery(initialQuery);
+
+        if (!isNaN(initialPage) && initialPage > 0) {
+            setPage(initialPage);
+        }
+    }, []);
+
+    // При изменении текстового поиска (пользователь вводит текст)
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (query !== searchQuery) {
+                setSearchQuery(query);
+                resetPagination();
+                setPage(1);
+                setSearchParams({ query, page: '1' });
+            }
         }, 500);
 
-        return () => clearTimeout(timeoutId);
+        return () => clearTimeout(timeout);
     }, [query]);
 
+    // Обработка ошибок
     useEffect(() => {
         if (error) {
-            setModalType('error');
             setModalMessage(`Ошибка запроса: ${error.message}`);
             setShowModal(true);
         }
     }, [error]);
 
-    useEffect(() => {
-        if (showModal && modalMessage === '') {
-            setModalMessage('📢 В целях оптимизации, максимальное количество страниц ограничено до 10. GitHub содержит десятки тысяч репозиториев, поэтому мы загружаем только часть для повышения скорости работы.');
-        }
-    }, [showModal, modalMessage]);
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setQuery(e.target.value);
+    };
+
+    const handlePageChange = (page: number) => {
+        setPage(page);
+        setSearchParams({ query: searchQuery, page: page.toString() });
+    };
 
     return (
         <div className={styles.container}>
             {showModal && (
                 <Modal
-                    type={modalType}
+                    type="error"
                     message={modalMessage}
                     onClose={() => setShowModal(false)}
                 />
@@ -120,20 +99,29 @@ export function HomePage() {
                 placeholder="Search GitHub Repositories"
             />
 
-            {(loading || networkStatus === 4) && <Loader />}
+            {(loading && networkStatus !== 7) && <Loader />}
 
-            <ul className={styles.repoList}>
-                {data?.search?.edges.map((repo: any) => (
-                    <li key={repo.node.id} className={styles.repoItem}>
-                        <a
-                            href={`/repository/${repo.node.owner.login}/${repo.node.name}`}
-                            className={styles.repoLink}
-                        >
-                            {repo.node.name}
-                        </a>
-                    </li>
-                ))}
-            </ul>
+            {/* Показываем только после загрузки и без ошибок */}
+            {!loading && !error && (
+                <ul className={styles.repoList}>
+                    {availableEdges
+                        .slice((currentPage - 1) * DEFAULT_ITEMS_PER_PAGE, currentPage * DEFAULT_ITEMS_PER_PAGE)
+                        .map((repo: any) => (
+                            <li key={repo.node.id} className={styles.repoItem}>
+                                <Link
+                                    to={`/repository/${repo.node.owner.login}/${repo.node.name}`}
+                                    className={styles.repoLink}
+                                >
+                                    {repo.node.name}
+                                </Link>
+                                {' — '}
+                                ⭐ {repo.node.stargazerCount}
+                                {' — '}
+                                🕒 {new Date(repo.node.pushedAt).toLocaleDateString()}
+                            </li>
+                        ))}
+                </ul>
+            )}
 
             {totalPages > 1 && (
                 <div className={styles.paginationControls}>
@@ -142,15 +130,6 @@ export function HomePage() {
                         totalPages={totalPages}
                         onPageChange={handlePageChange}
                     />
-
-                    <div className={styles.perPageSelector}>
-                        <label htmlFor="perPage">Показывать: </label>
-                        <select id="perPage" value={perPage} onChange={handlePerPageChange}>
-                            <option value={10}>10</option>
-                            <option value={20}>20</option>
-                            <option value={50}>50</option>
-                        </select>
-                    </div>
                 </div>
             )}
         </div>
