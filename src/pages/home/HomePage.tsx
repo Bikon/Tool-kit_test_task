@@ -1,63 +1,117 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client';
 import { useUnit } from 'effector-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SEARCH_REPOSITORIES } from '@/shared/api/github/queries';
 import { $searchQuery, setSearchQuery } from '@/store/searchStore';
 import { Loader } from '@/shared/ui/Loader/Loader';
 import { ErrorMessage } from '@/shared/ui/ErrorMessage/ErrorMessage';
 import { Paginator } from '@/shared/ui/Paginator/Paginator';
+import { Modal } from '@/shared/ui/Modal/Modal';
 import styles from './HomePage.module.css';
 
 export function HomePage() {
-    const [query, setQuery] = useState('');
-    const [afterCursor, setAfterCursor] = useState<string | null>(null);
-    const [beforeCursor, setBeforeCursor] = useState<string | null>(null);
-    const [isNext, setIsNext] = useState(true); // Запоминаем направление перехода
+    const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    const initialQuery = searchParams.get('query') || '';
+    const initialPage = parseInt(searchParams.get('page') || '1', 10);
+
+    const [query, setQuery] = useState(initialQuery);
+    const [currentPage, setCurrentPage] = useState(initialPage);
+    const [perPage, setPerPage] = useState(10);
+    const [lastCursor, setLastCursor] = useState<string | null>(null);
     const [searchQuery] = useUnit([$searchQuery]);
 
-    const { loading, data, error, refetch } = useQuery(SEARCH_REPOSITORIES, {
+    const [showModal, setShowModal] = useState(true);
+    const [modalType, setModalType] = useState<'success' | 'warning' | 'error'>('warning');
+    const [modalMessage, setModalMessage] = useState('');
+
+    const { loading, data, error, refetch, networkStatus } = useQuery(SEARCH_REPOSITORIES, {
         variables: {
             query: searchQuery || 'stars:>1',
-            first: isNext ? 10 : undefined,
-            after: isNext ? afterCursor : undefined,
-            last: !isNext ? 10 : undefined,
-            before: !isNext ? beforeCursor : undefined,
+            first: perPage,
+            after: lastCursor,
         },
         notifyOnNetworkStatusChange: true,
+        fetchPolicy: 'cache-first',
     });
+
+    const totalCount = data?.search?.repositoryCount || 0;
+    const totalPages = Math.min(Math.ceil(totalCount / perPage), 10);
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setQuery(e.target.value);
     };
 
+    const handlePageChange = async (page: number) => {
+        if (page > currentPage && data?.search?.pageInfo?.endCursor) {
+            setLastCursor(data.search.pageInfo.endCursor);
+        } else if (page < currentPage) {
+            setLastCursor(null);
+        }
+
+        setCurrentPage(page);
+        setSearchParams({ query: searchQuery, page: page.toString() });
+
+        await refetch({
+            query: searchQuery || 'stars:>1',
+            first: perPage,
+            after: page === 1 ? null : lastCursor,
+        });
+    };
+
+    const handlePerPageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newPerPage = parseInt(e.target.value, 10);
+        setPerPage(newPerPage);
+        setLastCursor(null);
+        setCurrentPage(1);
+
+        setSearchParams({ query: searchQuery, page: '1' });
+
+        refetch({
+            query: searchQuery || 'stars:>1',
+            first: newPerPage,
+            after: null,
+        });
+    };
+
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            setAfterCursor(null);
-            setBeforeCursor(null);
+            setLastCursor(null);
+            setCurrentPage(1);
             setSearchQuery(query);
+
+            setSearchParams({ query, page: '1' });
         }, 500);
 
         return () => clearTimeout(timeoutId);
     }, [query]);
 
-    const handleNextPage = () => {
-        if (data?.search?.pageInfo?.endCursor) {
-            setIsNext(true);
-            setAfterCursor(data.search.pageInfo.endCursor);
-            setBeforeCursor(null);
+    useEffect(() => {
+        if (error) {
+            setModalType('error');
+            setModalMessage(`Ошибка запроса: ${error.message}`);
+            setShowModal(true);
         }
-    };
+    }, [error]);
 
-    const handlePrevPage = () => {
-        if (data?.search?.pageInfo?.startCursor) {
-            setIsNext(false);
-            setBeforeCursor(data.search.pageInfo.startCursor);
-            setAfterCursor(null);
+    useEffect(() => {
+        if (showModal && modalMessage === '') {
+            setModalMessage('📢 В целях оптимизации, максимальное количество страниц ограничено до 10. GitHub содержит десятки тысяч репозиториев, поэтому мы загружаем только часть для повышения скорости работы.');
         }
-    };
+    }, [showModal, modalMessage]);
 
     return (
         <div className={styles.container}>
+            {showModal && (
+                <Modal
+                    type={modalType}
+                    message={modalMessage}
+                    onClose={() => setShowModal(false)}
+                />
+            )}
+
             <input
                 type="text"
                 value={query}
@@ -66,8 +120,7 @@ export function HomePage() {
                 placeholder="Search GitHub Repositories"
             />
 
-            {loading && <Loader />}
-            {error && <ErrorMessage message={error.message} />}
+            {(loading || networkStatus === 4) && <Loader />}
 
             <ul className={styles.repoList}>
                 {data?.search?.edges.map((repo: any) => (
@@ -82,13 +135,23 @@ export function HomePage() {
                 ))}
             </ul>
 
-            {data && (
-                <Paginator
-                    onNext={handleNextPage}
-                    onPrev={handlePrevPage}
-                    hasNextPage={data.search.pageInfo.hasNextPage}
-                    hasPreviousPage={data.search.pageInfo.hasPreviousPage}
-                />
+            {totalPages > 1 && (
+                <div className={styles.paginationControls}>
+                    <Paginator
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                    />
+
+                    <div className={styles.perPageSelector}>
+                        <label htmlFor="perPage">Показывать: </label>
+                        <select id="perPage" value={perPage} onChange={handlePerPageChange}>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                        </select>
+                    </div>
+                </div>
             )}
         </div>
     );

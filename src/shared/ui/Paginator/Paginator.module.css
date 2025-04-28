@@ -3,22 +3,44 @@
     justify-content: center;
     margin-top: 20px;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
-.pageButton {
+.pageButton,
+.arrowButton {
     padding: 8px 12px;
     border: 1px solid #ccc;
     background-color: #fff;
     border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: all 0.2s ease;
+    color: #333; /* обычный цвет текста */
 }
 
-.pageButton:hover {
-    background-color: #f0f0f0;
+.pageButton:hover,
+.arrowButton:hover {
+    background-color: #e6f0ff;
+    color: #0070f3;
+    border-color: #0070f3;
+    box-shadow: 0 2px 6px rgba(0, 112, 243, 0.3);
 }
-
-.pageButton:disabled {
+.pageButton:disabled,
+.arrowButton:disabled {
     background-color: #eaeaea;
+    color: #aaa;
+    border-color: #ccc;
     cursor: not-allowed;
 }
+
+.activePage {
+    background-color: #0070f3;
+    color: #fff;
+    border-color: #0070f3;
+}
+
+.dots {
+    padding: 8px 12px;
+    color: #888;
+    user-select: none;
+}
+
